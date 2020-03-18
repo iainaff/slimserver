@@ -1,6 +1,6 @@
 package Slim::Web::Pages::Playlist;
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License, 
 # version 2.
@@ -137,7 +137,7 @@ sub playlist {
 	
 	# get the playlist duration - use cached value if playlist has not changed
 	my $durationCacheKey = 'playlist_duration_' . $client->currentPlaylistUpdateTime();
-	if ( my $cached = $cache->get($durationCacheKey) ) {
+	if ( $songcount > 1 && (my $cached = $cache->get($durationCacheKey)) ) {
 		$params->{'pageinfo'}->{'totalDuration'} = Slim::Utils::DateTime::timeFormat($cached);
 	}
 	else {
@@ -180,7 +180,7 @@ sub playlist {
 	# try to use cached data if we've been showing the same set of tracks before
 	my $tracksCacheKey = join('_', 'playlist_tracks_', $client->currentPlaylistUpdateTime(), $start, $itemsPerPage, $tags);
 	my $tracks;
-	if ( my $cached = $cache->get($tracksCacheKey) ) {
+	if ( $songcount > 1 && (my $cached = $cache->get($tracksCacheKey)) ) {
 		$tracks = $cached;
 	}
 	else {

@@ -1,8 +1,6 @@
 package Slim::Web::Settings::Player::Audio;
 
-# $Id: Basic.pm 10633 2006-11-09 04:26:27Z kdf $
-
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -31,7 +29,7 @@ sub needsClient {
 sub prefs {
 	my ($class, $client) = @_;
 
-	my @prefs = qw(powerOnResume lameQuality maxBitrate);
+	my @prefs = qw(powerOnResume lameQuality maxBitrate fadeInDuration);
 
 	if ($client->hasPowerControl()) {
 		push @prefs,'powerOffDac';

@@ -1,8 +1,7 @@
 package Slim::Web::HTTP;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -35,6 +34,7 @@ use MIME::QuotedPrint;
 use Scalar::Util qw(blessed);
 use Socket qw(:crlf SOMAXCONN SOL_SOCKET SO_SNDBUF inet_ntoa);
 use Storable qw(thaw);
+use URI;
 
 use Slim::Networking::Select;
 use Slim::Player::HTTP;
@@ -451,6 +451,8 @@ sub processHTTP {
 
 		main::DEBUGLOG && $isDebug && $log->debug("Raw path is [$path]");
 
+		checkCORS($request, $response);
+
 		# break here for raw HTTP code
 		# we hand the $response object only, it contains the almost unmodified request
 		# we took care above of basic HTTP stuff and authorization
@@ -688,16 +690,23 @@ sub processHTTP {
 		processURL($httpClient, $response, $params);
 
 	} else {
-
-		if ( $log->is_warn ) {
-			$log->warn("Bad Request: [" . join(' ', ($request->method, $request->uri)) . "]");
+		if ( $request->method eq 'OPTIONS' ) {
+			checkCORS($request, $response);
+			$response->code(RC_OK);
 		}
 
-		$response->code(RC_METHOD_NOT_ALLOWED);
 		$response->header('Connection' => 'close');
-		$response->content_type('text/html');
-		$response->content_ref(filltemplatefile('html/errors/405.html', $params));
 
+		if ( !$response->code() ) {
+			if ( $log->is_warn ) {
+				$log->warn("Bad Request: [" . join(' ', ($request->method, $request->uri)) . "]");
+			}
+
+			$response->code(RC_METHOD_NOT_ALLOWED);
+			$response->content_type('text/html');
+			$response->content_ref(filltemplatefile('html/errors/405.html', $params));
+		}
+	
 		$httpClient->send_response($response);
 		closeHTTPSocket($httpClient);
 	}
@@ -2548,6 +2557,47 @@ sub checkAuthorization {
 	}
 
 	return $ok;
+}
+
+sub checkCORS {
+	my ($request, $response) = @_;
+
+	if ( my $allowedHosts = $prefs->get('corsAllowedHosts') ) {
+		my ($host, $origin);
+
+		eval {
+			$host = $request->header('Host');
+			$origin = $request->header('Origin') || $request->header('Referer');
+		};
+
+		if ($origin && $host) {
+			my ($h, $p) = Slim::Utils::Misc::crackURL($origin);
+
+			# if the Host request header lists no port, crackURL() reports it as port 80, so we should
+			# pretend the Host header specified port 80 if it did not
+			$host .= ':80' if $host !~ m/:\d{1,}$/;
+			my $originHost = "$h:$p";
+
+			if ("$h:$p" ne $host) {
+				my $uri = URI->new($origin)->as_string;
+				$uri =~ s/(:\/\/.*?)\//$1/;
+
+				my ($match) = grep {
+					$_ =~ s/(:\/\/.*?)\//$1/;
+					$_ eq $uri;
+				} split /[,\s]+/, $allowedHosts;
+
+				if ($match) {
+					$response->header('Access-Control-Allow-Origin' => $origin);
+				}
+				elsif (main::INFOLOG && $log->is_info) {
+					$log->info("CORS is not enabled for $origin");
+				}
+			}
+		}
+	}
+
+	return $response->header('Access-Control-Allow-Origin');
 }
 
 # addCloseHandler

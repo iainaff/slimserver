@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Logitech Media Server Copyright 2001-2009 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -92,7 +92,7 @@ if ( INFOLOG || DEBUGLOG ) {
 	require Slim::Utils::PerlRunTime;
 }
 
-our $VERSION     = '7.9.2';
+our $VERSION     = '7.9.3';
 our $REVISION    = undef;
 our $BUILDDATE   = undef;
 

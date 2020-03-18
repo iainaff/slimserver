@@ -1,8 +1,7 @@
 package Slim::Web::JSONRPC;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -81,7 +80,7 @@ sub handleURI {
 	}
 
 	# see Slim::Web::CSRF::isRequestCSRFSafe
-	if ($prefs->get('csrfProtectionLevel') && (my $request = $httpResponse->request)) {
+	if (!$httpResponse->header('Access-Control-Allow-Origin') && $prefs->get('csrfProtectionLevel') && (my $request = $httpResponse->request)) {
 		my ($host, $origin);
 		eval { 
 			$host = $request->header('Host');
@@ -296,7 +295,6 @@ sub writeResponse {
 
 	# set a content type to 1.1 proposed value. Should work with 1.0 as it is not specified
 	$httpResponse->content_type('application/json');
-	$httpResponse->header('Access-Control-Allow-Origin' => '*' );
 
 	use bytes;
 
@@ -484,7 +482,7 @@ sub requestMethod {
 
 	} else {
 		$clientid ||= $playername;
-		$log->error(($clientid ? "$clientid: " : '') . "request not dispatchable!");
+		$log->warn(($clientid ? "$clientid: " : '') . "request not dispatchable!");
 		Slim::Web::HTTP::closeHTTPSocket($context->{'httpClient'});
 		return;
 	}	

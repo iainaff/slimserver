@@ -1,6 +1,6 @@
 package Slim::Plugin::DontStopTheMusic::Plugin;
 
-# Logitech Media Server Copyright 2001-2016 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -180,6 +180,7 @@ sub onPlaylistChange {
 		( Slim::Utils::PluginManager->isEnabled('Slim::Plugin::RandomPlay::Plugin') && Slim::Plugin::RandomPlay::Plugin::active($client) )
 		|| ( Slim::Utils::PluginManager->isEnabled('Plugins::SugarCube::Plugin') && preferences('plugin.SugarCube')->client($client)->get('sugarcube_status') )
 	) {
+		$log->warn("Found RandomPlay or SugarCube active - I'm not going to interfere with them.");
 		return;
 	}
 
@@ -228,7 +229,6 @@ sub dontStopTheMusic {
 
 	my $numTracks = $prefs->get('newtracks') || MIN_TRACKS_LEFT;
 	
-	# TODO - don't run twice, set a flag
 	if ($songsRemaining < $numTracks) {
 		# don't continue if the last item in the queue is a radio station or similar
 		if ( my $handler = Slim::Player::ProtocolHandlers->handlerForURL( $client->playingSong()->track->url ) ) {
@@ -251,6 +251,8 @@ sub dontStopTheMusic {
 		
 		if ( my $handler = $class->getHandler($client) ) {
 			$client->pluginData( active => 1 );
+
+			Slim::Player::Playlist::preserveShuffleOrder($client);
 			
 			$handler->( $client, sub {
 				my ($client, $tracks) = @_;

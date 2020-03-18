@@ -1,8 +1,7 @@
 package Slim::Utils::Misc;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License, 
 # version 2.
@@ -914,6 +913,10 @@ sub readDirectory {
 
 			return @diritems;
 		}
+
+		# At some point Windows seems to have started returning content of the "current directory" on the drive 
+		# if the path wasn't absolute. Make sure we start with a slash if only a drive letter is given. - mh
+		$native_dirname .= '/' if $native_dirname =~ /^[a-z]:$/i;
 	}
 
 	if ($recursive) {
@@ -934,7 +937,7 @@ sub readDirectory {
 	
 		while (defined (my $item = readdir(DIR)) ) {
 			# call idle streams to service timers - used for blocking animation.
-			if (scalar @diritems % 3) {
+			if (!scalar @diritems % 20) {
 				main::idleStreams();
 			}
 	

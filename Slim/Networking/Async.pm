@@ -1,8 +1,7 @@
 package Slim::Networking::Async;
 
-# $Id$
 
-# Logitech Media Server Copyright 2003-2011 Logitech.
+# Logitech Media Server Copyright 2003-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License, 
 # version 2.
@@ -16,6 +15,7 @@ use base qw(Slim::Utils::Accessor);
 
 use Scalar::Util qw(blessed weaken);
 use Socket qw(inet_ntoa);
+use Errno qw(EWOULDBLOCK);
 
 use Slim::Networking::Async::DNS;
 use Slim::Networking::Async::Socket::HTTP;
@@ -111,6 +111,7 @@ sub connect {
 	
 	# Bug 5673, avoid a crash if socket is undef
 	if ( !defined $socket ) {
+		$log->error("Failed to connect to $host:$port, because\n$@");
 		_connect_error( $socket, $self, $args );
 		return;
 	}
@@ -163,14 +164,20 @@ sub _connect_error {
 
 sub _async_connect {
 	my ( $socket, $self, $args ) = @_;
-	
-	# Kill the timeout timer
-	Slim::Utils::Timers::killTimers( $socket, \&_connect_error );
-	
+
 	# check that we are actually connected
 	if ( !$socket->connected ) {
-		return _connect_error( $socket, $self, $args );
+		if ( ref $socket eq 'Slim::Networking::Async::Socket::HTTPS' and $! == EWOULDBLOCK ) {
+			# The TLS handshake is not yet complete.  Retry later.
+			return;
+		}
+		else {
+			return _connect_error( $socket, $self, $args );
+		}
 	}
+
+	# Kill the timeout timer
+	Slim::Utils::Timers::killTimers( $socket, \&_connect_error );
 	
 	# remove our initial selects
 	Slim::Networking::Select::removeError($socket);

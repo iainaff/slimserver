@@ -104,7 +104,7 @@ my $prefs = preferences('plugin.extensions');
 
 $prefs->init({ repos => [], plugin => {}, auto => 0 });
 
-$prefs->migrate(2, 
+$prefs->migrate(2,
 				sub {
 					# find any plugins already installed via previous version of extension downloader and save as selected
 					# this should avoid trying to remove existing plugins when this version is first loaded
@@ -227,8 +227,8 @@ sub appsQuery {
 	for my $repo (keys %repos) {
 
 		getExtensions({
-			'name'   => $repo, 
-			'type'   => $args->{'type'}, 
+			'name'   => $repo,
+			'type'   => $args->{'type'},
 			'target' => $args->{'targetPlat'} || Slim::Utils::OSDetect::OS(),
 			'version'=> $args->{'targetVers'} || $::VERSION,
 			'lang'   => $args->{'lang'} || $Slim::Utils::Strings::currentLang,
@@ -278,6 +278,64 @@ sub _appsQueryCB {
 	$request->setStatusDone();
 }
 
+sub getCurrentPlugins {
+	my $plugins = Slim::Utils::PluginManager->allPlugins;
+	my $states  = preferences('plugin.state');
+
+	my $hide = {};
+	my $current = {};
+
+	# create entries for built in plugins and those already installed
+	my @active;
+	my @inactive;
+
+	for my $plugin (keys %$plugins) {
+
+		if ( main::NOMYSB && ($plugins->{$plugin}->{needsMySB} && $plugins->{$plugin}->{needsMySB} !~ /false|no/i) ) {
+			main::DEBUGLOG && $log->debug("Skipping plugin: $plugin - requires mysqueezebox.com, but support for mysqueezebox.com is disabled.");
+			next;
+		}
+
+		my $entry = $plugins->{$plugin};
+
+		# don't show enforced plugins
+		next if $entry->{'enforce'};
+
+		my $state = $states->get($plugin);
+
+		my $entry = {
+			name    => $plugin,
+			title   => Slim::Utils::Strings::getString($entry->{'name'}),
+			desc    => Slim::Utils::Strings::getString($entry->{'description'}),
+			error   => Slim::Utils::PluginManager->getErrorString($plugin),
+			creator => $entry->{'creator'},
+			email   => $entry->{'email'},
+			homepage=> $entry->{'homepageURL'},
+			version => $entry->{'version'},
+			settings=> Slim::Utils::PluginManager->isEnabled($entry->{'module'}) ? $entry->{'optionsURL'} : undef,
+			manual  => $entry->{'basedir'} !~ /InstalledPlugins/ ? 1 : 0,
+			enforce => $entry->{'enforce'},
+		};
+
+		if ($state =~ /enabled/) {
+
+			push @active, $entry;
+
+			if (!$entry->{'manual'}) {
+				$current->{ $plugin } = $entry->{'version'};
+			}
+
+		} elsif ($state =~ /disabled/) {
+
+			push @inactive, $entry;
+		}
+
+		$hide->{$plugin} = 1;
+	}
+
+	return ($current, \@active, \@inactive, $hide);
+}
+
 sub findUpdates {
 	my $results = shift;
 	my $current = shift;
@@ -304,7 +362,7 @@ sub findUpdates {
 
 		if (!defined $current->{ $app } || Slim::Utils::Versions->compareVersions($apps->{ $app }->{'version'}, $current->{ $app }) > 0){
 
-			main::INFOLOG && $log->info("$app action install version " . $apps->{ $app }->{'version'} . 
+			main::INFOLOG && $log->info("$app action install version " . $apps->{ $app }->{'version'} .
 										($current->{ $app } ? (" from " . $current->{ $app }) : ''));
 
 			$actions->{ $app } = { action => 'install', url => $apps->{ $app }->{'url'}, sha => $apps->{ $app }->{'sha'} };
@@ -362,19 +420,19 @@ sub _parseResponse {
 
 	my $xml  = {};
 
-	eval { 
+	eval {
 		$xml = XMLin($http->content,
 			SuppressEmpty => undef,
-			KeyAttr     => { 
-				title   => 'lang', 
-				desc    => 'lang', 
+			KeyAttr     => {
+				title   => 'lang',
+				desc    => 'lang',
 				changes => 'lang'
 			},
 			ContentKey  => '-content',
 			GroupTags   => {
-				applets => 'applet', 
-				sounds  => 'sound', 
-				wallpapers => 'wallpaper', 
+				applets => 'applet',
+				sounds  => 'sound',
+				wallpapers => 'wallpaper',
 				plugins => 'plugin',
 				patches => 'patch',
 			},
@@ -474,6 +532,9 @@ sub _parseXML {
 				if ($entry->{'changes'} && ref $entry->{'changes'} eq 'HASH') {
 					$new->{'changes'} = $entry->{'changes'}->{ $lang } || $entry->{'changes'}->{ 'EN' };
 				}
+				elsif (!ref $entry->{changes}) {
+					$new->{changes} = $entry->{changes};
+				}
 				$new->{changes} = '' if ref $new->{changes};
 
 				$new->{'link'}    = $entry->{'link'}    if $entry->{'link'};
@@ -493,7 +554,7 @@ sub _parseXML {
 
 	if ($details) {
 
-		if ( $xml->{details} && $xml->{details}->{title} 
+		if ( $xml->{details} && $xml->{details}->{title}
 				 && ($xml->{details}->{title}->{$lang} || $xml->{details}->{title}->{EN}) ) {
 
 			$repoTitle = $xml->{details}->{title}->{$lang} || $xml->{details}->{title}->{EN};

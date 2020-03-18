@@ -1,8 +1,7 @@
 package Slim::Music::Info;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -1487,10 +1486,6 @@ sub typeFromPath {
 		}
 		elsif ($fullpath =~ /^([a-z]+:)/ && defined($suffixes{$1})) {
 			$type = $suffixes{$1};
-		} 
-		elsif ( $fullpath =~ /^(?:live365)/ ) {
-			# Force mp3 for protocol handlers
-			return 'mp3';
 		}
 		else {
 

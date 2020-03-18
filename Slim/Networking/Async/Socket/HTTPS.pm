@@ -1,8 +1,7 @@
 package Slim::Networking::Async::Socket::HTTPS;
 
-# $Id$
 
-# Logitech Media Server Copyright 2003-2011 Logitech.
+# Logitech Media Server Copyright 2003-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License, 
 # version 2.
@@ -14,7 +13,15 @@ BEGIN {
 	use IO::Socket::SSL;
 }
 
-use base qw(Net::HTTPS Slim::Networking::Async::Socket);
+use base qw(Net::HTTPS::NB Slim::Networking::Async::Socket);
+
+sub new {
+	my ($class, %args) = @_;
+	# unfortunately Windows crashes when using non-blocking handshaking, but a timeout occurs
+	# let's disable this until somebody has figured out what's wrong with it on Windows - mh
+	$args{'Blocking'} = main::ISWINDOWS || 0;
+	return $class->SUPER::new(%args);
+}
 
 sub close {
 	my $self = shift;

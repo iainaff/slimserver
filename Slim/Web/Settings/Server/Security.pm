@@ -1,8 +1,7 @@
 package Slim::Web::Settings::Server::Security;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -24,7 +23,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('server'), qw(filterHosts allowedHosts csrfProtectionLevel authorize username) );
+	return (preferences('server'), qw(filterHosts allowedHosts corsAllowedHosts csrfProtectionLevel authorize username) );
 }
 
 sub handler {
@@ -32,10 +31,10 @@ sub handler {
 
 	# disable authorization if no username is set
 	if ($paramRef->{'saveSettings'} && $paramRef->{'pref_authorize'} && !$paramRef->{'pref_username'}) {
-		
+
 		$paramRef->{'warning'} .= Slim::Utils::Strings::string('SETUP_MISSING_USERNAME') . ' ';
 		$paramRef->{'pref_authorize'} = 0;
-		
+
 	}
 
 	# pre-process password to avoid saving clear text
@@ -53,11 +52,11 @@ sub handler {
 		else {
 
 			my $currentPassword = preferences('server')->get('password');
-		
+
 			if (defined($val) && $val ne '' && ($currentPassword eq '' || sha1_base64($val) ne $currentPassword)) {
 				$prefs->set('password', sha1_base64($val));
 			}
-			
+
 		}
 	}
 

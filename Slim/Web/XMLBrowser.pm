@@ -1,8 +1,7 @@
 package Slim::Web::XMLBrowser;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License, 
 # version 2.
@@ -753,7 +752,7 @@ sub handleFeed {
 		# make sense to have an All Songs link. (bug 6531)
 		for my $item ( @{ $stash->{'items'} } ) {
 			next unless ( $item->{'type'} && $item->{'type'} eq 'audio' ) || $item->{'enclosure'} || $item->{'play'};
-			next unless defined $item->{'duration'};
+			next unless defined $item->{'duration'} || $item->{'playall'};
 
 			$stash->{'itemsHaveAudio'} = 1;
 			$stash->{'currentIndex'}   = $crumb[-1]->{index};

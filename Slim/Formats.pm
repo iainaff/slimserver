@@ -1,8 +1,7 @@
 package Slim::Formats;
 
-# $Id$
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
@@ -16,12 +15,13 @@ use Slim::Music::Info;
 use Slim::Utils::Log;
 use Slim::Utils::Misc;
 use Slim::Utils::Unicode;
+use Slim::Utils::Versions;
 
 # Map our tag functions - so they can be dynamically loaded.
 our (%tagClasses, %loadedTagClasses);
 
 my $init = 0;
-my $log  = logger('formats');
+my $log  = logger('formats.audio');
 
 =head1 NAME
 
@@ -58,8 +58,10 @@ sub init {
 		'wmap' => 'Slim::Formats::WMA',
 		'wmal' => 'Slim::Formats::WMA',
 		'alc' => 'Slim::Formats::Movie',
+		'alcx' => 'Slim::Formats::Movie',
 		'aac' => 'Slim::Formats::Movie',
 		'mp4' => 'Slim::Formats::Movie',
+		'mp4x' => 'Slim::Formats::Movie',
 		'sls' => 'Slim::Formats::Movie',
 		'shn' => 'Slim::Formats::Shorten',
 		'mpc' => 'Slim::Formats::Musepack',
@@ -79,9 +81,13 @@ sub init {
 		'xpf' => 'Slim::Formats::Playlists::XSPF',
 	);
 
-	if ($Audio::Scan::VERSION =~ /^0\.9[45]$/) {
+	if (Slim::Utils::Versions->compareVersions($Audio::Scan::VERSION,'0.94') >= 0) {
 		$tagClasses{'dff'} = 'Slim::Formats::DFF';
 		$tagClasses{'dsf'} = 'Slim::Formats::DSF';
+	}
+
+	if (Slim::Utils::Versions->compareVersions($Audio::Scan::VERSION, '1.02') >= 0) {
+		$tagClasses{'ops'} = 'Slim::Formats::OggOpus';
 	}
 
 	$init = 1;
@@ -248,6 +254,11 @@ sub readTags {
 	if (-e $filepath) {
 		# cache the file size & date
 		($tags->{'FILESIZE'}, $tags->{'TIMESTAMP'}) = (stat(_))[7,9];
+	}
+
+	if ($tags->{'LEADING_MDAT'}) {
+		$type = 'mp4x';
+		$tags->{'CONTENT_TYPE'} = 'alcx' if ($tags->{'CONTENT_TYPE'} eq 'alc')
 	}
 
 	# Only set if we couldn't read it from the file.

@@ -1,11 +1,10 @@
 package Slim::Utils::PluginManager;
 
-# Logitech Media Server Copyright 2001-2011 Logitech.
+# Logitech Media Server Copyright 2001-2020 Logitech.
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License,
 # version 2.
 #
-# $Id$
 
 use strict;
 
@@ -356,7 +355,7 @@ sub load {
 			elsif ( $binArch && $binArch eq 'armhf-linux' ) {
 				push @paths, catdir($binDir, 'arm-linux');
 			}
-			elsif ( $binArch =~ /darwin/i && $osDetails->{osArch} =~ /x86_64/ ) {
+			elsif ( $binArch =~ /darwin/i && ($osDetails->{osArch} =~ /x86_64/ || $osDetails->{osName} =~ /\b10\.[1-9][4-9]\./) ) {
 				unshift @paths, catdir($binDir, $^O . '-' . $osDetails->{osArch});
 				unshift @paths, catdir($binDir, $binArch . '-' . $osDetails->{osArch});
 			}
