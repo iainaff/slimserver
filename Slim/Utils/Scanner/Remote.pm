@@ -333,6 +333,7 @@ sub readRemoteHeaders {
 
 	# Set content-type for original URL and redirected URL
 	main::DEBUGLOG && $log->is_debug && $log->debug( 'Updating content-type for ' . $track->url . " to $type" );
+	Slim::Schema->clearContentTypeCache( $track->url );
 	$track = Slim::Music::Info::setContentType( $track->url, $type );
 
 	if ( $track->url ne $url ) {
@@ -371,7 +372,7 @@ sub readRemoteHeaders {
 	}
 
 	# Is this an audio stream or a playlist?
-	if ( Slim::Music::Info::isSong( $track, $type ) ) {
+	if ( $type = Slim::Music::Info::isSong( $track, $type ) ) {
 		main::INFOLOG && $log->is_info && $log->info("This URL is an audio stream [$type]: " . $track->url);
 
 		$track->content_type($type);
@@ -416,6 +417,27 @@ sub readRemoteHeaders {
 			$http->read_body( {
 				readLimit   => 64,
 				onBody      => \&parseOggHeader,
+				passthrough => [ $track, $args ],
+			} );
+		}
+		elsif ( $type eq 'wav' ) {
+
+			# Read the header to allow support for wav as it requires different decode path
+			main::DEBUGLOG && $log->is_debug && $log->debug('Reading WAV header');
+			$http->read_body( {
+				readLimit   => 36,
+				onBody      => \&parseWavHeader,
+				passthrough => [ $track, $args ],
+			} );
+		}
+		elsif ( $type eq 'aif' ) {
+
+			# Read the header to allow support for aif as it requires different decode path
+			main::DEBUGLOG && $log->is_debug && $log->debug('Reading AIF header');
+
+			$http->read_body( {
+				readLimit   => 4*1024,
+				onBody      => \&parseAifHeader,
 				passthrough => [ $track, $args ],
 			} );
 		}
@@ -705,10 +727,26 @@ sub parseOggHeader {
 		my $bitrate = 0.6 * $samplerate * $samplesize * $channels;
 		$track->samplerate($samplerate);
 		$track->samplesize($samplesize);
+		$track->channels($channels);	
 		Slim::Music::Info::setBitrate( $track->url, $bitrate );
 		if ( main::DEBUGLOG && $log->is_debug ) {
 			$log->debug( sprintf( "OggFlac: %dHz, %dBits, %dch => estimated bitrate: %dkbps",
 					      $samplerate, $samplesize, $channels, int( $bitrate / 1000 ) ) );
+		}
+	# search for Ogg Opus header within the data - if so change the content type to opus for OggOpus
+	# OggOpus header defined: https://people.xiph.org/~giles/2013/draft-ietf-codec-oggopus.html#rfc.section.5.1
+	} elsif (substr($data, 0, 8) eq 'OpusHead') {
+		main::DEBUGLOG && $log->is_debug && $log->debug("Ogg stream is OggOpus - setting content type [ops]");
+		Slim::Schema->clearContentTypeCache( $track->url );
+		Slim::Music::Info::setContentType( $track->url, 'ops' );
+		$track->content_type('ops');
+
+		my $samplerate = unpack('V', substr($data, 12, 4));
+		my $channels = unpack('C', substr($data, 9, 1));
+		$track->samplerate($samplerate);
+		$track->samplesize(16);
+		if ( main::DEBUGLOG && $log->is_debug ) {
+			$log->debug( sprintf( "OggOpus: input %dHz, %dch", $samplerate, $channels ) );
 		}
 	}
 
@@ -716,9 +754,91 @@ sub parseOggHeader {
 	$cb->( $track, undef, @{$pt} );
 }
 
+sub parseWavHeader {
+	my ( $http, $track, $args ) = @_;
+
+	my $client = $args->{client};
+	my $cb	   = $args->{cb} || sub {};
+	my $pt	   = $args->{pt} || [];
+
+	my $data = $http->response->content;
+	
+	# do minimum check
+	if (substr($data, 0, 4) ne 'RIFF') {
+		$cb->( $track, undef, @{$pt} );
+		return;
+	}	
+
+	# search for Wav headers within the data
+	my $samplerate = unpack('V', substr($data, 24, 4));
+	my $samplesize = unpack('v', substr($data, 34, 2));
+	my $channels = unpack('v', substr($data, 22, 2));
+	my $bitrate = $samplerate * $samplesize * $channels;
+	$track->samplerate($samplerate);
+	$track->samplesize($samplesize);
+	$track->channels($channels);	
+	Slim::Music::Info::setBitrate( $track->url, $bitrate );
+	if ( main::DEBUGLOG && $log->is_debug ) {
+		$log->debug( sprintf( "Wav: %dHz, %dBits, %dch => bitrate: %dkbps",
+					      $samplerate, $samplesize, $channels, int( $bitrate / 1000 ) ) );
+	} 
+
+	# All done
+	$cb->( $track, undef, @{$pt} );
+}
+
+sub parseAifHeader {
+	my ( $http, $track, $args ) = @_;
+
+	my $client = $args->{client};
+	my $cb	   = $args->{cb} || sub {};
+	my $pt	   = $args->{pt} || [];
+
+	my $data = $http->response->content;
+		
+	# do minimum check
+	if (substr($data, 0, 4) ne 'FORM') {
+		$cb->( $track, undef, @{$pt} );
+		return;
+	}	
+		
+	my $offset = 12;
+	
+	while ($offset < length($data) - 22) {
+
+		if (substr($data, $offset, 4) eq 'COMM') {
+			my $samplesize = unpack('n', substr($data, $offset+14, 2));
+			my $channels = unpack('n', substr($data, $offset+8, 2));
+			# sample rate is encoded as IEEE 80 bit extended format
+			my $samplerate = unpack('N', substr($data, $offset+18, 4));
+			my $exponent = (unpack('s>', substr($data, $offset+16, 2)) & 0x7fff) - 16383 - 31;
+			while ($exponent < 0) { $samplerate >>= 1; $exponent++; }
+			while ($exponent > 0) { $samplerate <<= 1; $exponent--; }
+			my $bitrate = $samplerate * $samplesize * $channels;			
+			$track->samplerate($samplerate);
+			$track->samplesize($samplesize);
+			$track->channels($channels);	
+			$track->endian(1);	
+			Slim::Music::Info::setBitrate( $track->url, $bitrate );
+			if ( main::DEBUGLOG && $log->is_debug ) {
+				$log->debug( sprintf( "Aif: %dHz, %dBits, %dch => bitrate: %dkbps",
+						$samplerate, $samplesize, $channels, int( $bitrate / 1000 ) ) );
+			}	
+			last;
+		} 
+		
+		$offset += unpack('N', substr($data, $offset+4, 4)) + 8;
+	}
+
+	$cb->( $track, undef, @{$pt} );
+}
+
 sub streamAudioData {
 	my ( $http, $dataref, $track, $args, $url ) = @_;
 
+	return 1 unless defined $$dataref;
+
+	my $len = length($$dataref);
 	my $first;
 
 	# Buffer data to a temp file, 128K of data by default
@@ -731,7 +851,6 @@ sub streamAudioData {
 		main::DEBUGLOG && $log->is_debug && $log->debug( $track->url . ' Buffering audio stream data to temp file ' . $fh->filename );
 	}
 
-	my $len = length($$dataref);
 	$fh->write( $$dataref, $len );
 
 	if ( $first ) {
@@ -760,10 +879,8 @@ sub streamAudioData {
 
 	$args->{_scanlen} -= $len;
 
-	if ( $args->{_scanlen} > 0 ) {
+	if ( $args->{_scanlen} > 0 && $len) {
 		# Read more data
-		#$log->is_debug && $log->debug( $track->url . ' Bytes left: ' . $args->{_scanlen} );
-
 		return 1;
 	}
 
@@ -823,8 +940,8 @@ sub streamAudioData {
 	delete $args->{_scanbuf};
 	delete $args->{_scanlen};
 
-	# as https for whatever eason didn't allow us to start the stream while scanning
-	# we're no disconnecting to allow the stream to start
+	# as https for whatever reason didn't allow us to start the stream while scanning
+	# we're now disconnecting to allow the stream to start
 	if ( $args->{cb} && $track->url =~ /^https/ ) {
 		$http->disconnect;
 		$args->{cb}->( $track, undef, @{$args->{pt} || []} );

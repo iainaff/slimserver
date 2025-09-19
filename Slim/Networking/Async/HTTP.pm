@@ -10,6 +10,8 @@ package Slim::Networking::Async::HTTP;
 
 use strict;
 
+use constant MIN_IO_SOCKET_SSL => '2.020';
+
 BEGIN {
 	my $hasSSL;
 
@@ -25,6 +27,10 @@ BEGIN {
 
 		if ($@) {
 			msg("Async::HTTP: Unable to load IO::Socket::SSL, will try connecting to SSL servers in non-SSL mode\n$@\n");
+		}
+		# if we're using an outdated version of IO::Socket::SSL, log a warning
+		elsif (Slim::Utils::Versions->compareVersions(MIN_IO_SOCKET_SSL, $IO::Socket::SSL::VERSION) > 0) {
+			msg("You're using a rather old version of IO::Socket::SSL (v$IO::Socket::SSL::VERSION) - please try to update to at least " . MIN_IO_SOCKET_SSL . " for improved compatibility.\n");
 		}
 
 		return $hasSSL;
@@ -46,6 +52,7 @@ use Slim::Utils::Log;
 use Slim::Utils::Misc;
 use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
+use Slim::Utils::Versions;
 
 use constant BUFSIZE   => 16 * 1024;
 use constant MAX_REDIR => 7;
@@ -505,11 +512,12 @@ sub _http_read {
 
 sub _http_read_body {
 	my ( $socket, $self, $args ) = @_;
+	
+	my $result = $socket->read_entity_body( my $buf, BUFSIZE );
+	return if $result < 0;
 
 	Slim::Utils::Timers::killTimers( $socket, \&_http_socket_error );
 	Slim::Utils::Timers::killTimers( $socket, \&_http_read_timeout );
-
-	my $result = $socket->read_entity_body( my $buf, BUFSIZE );
 
 	if ( $result ) {
 		main::DEBUGLOG && $log->debug("Read body: [$result] bytes");
@@ -539,6 +547,9 @@ sub _http_read_body {
 	elsif ( $args->{onStream} ) {
 		# The caller wants a callback on every chunk of data streamed
 		my $pt   = $args->{passthrough} || [];
+		if ( !$result ) {
+			$buf = defined $result ? "" : undef;
+		}
 		my $more = $args->{onStream}->( $self, \$buf, @{$pt} );
 
 		# onStream callback can signal to stop the stream by returning false
